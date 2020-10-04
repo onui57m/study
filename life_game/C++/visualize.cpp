@@ -5,22 +5,32 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T03:33:22+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T14:19:04+09:00
+ * @Last modified time: 2020-10-04T18:40:57+09:00
  */
 
 #include <fstream>
 #include <cstdio>
+#include <vector>
+
 #include <GL/gl.h>
 #include <GL/glut.h>
 
+typedef std::vector<int> vi;
+
+#define POINT_SIZE 5
+
 void initialize();
 void display();
-void delay(int a);
+void timer(int a);
 void keyboard(unsigned char key, int a, int b);
 
 int vis_index = 0;
 int width, height, point_size;
 int total_step;
+char move_flag;
+
+vi init_window_position(2);
+int window_width, window_height;
 
 int main(int argc, char *argv[])
 {
@@ -30,20 +40,20 @@ int main(int argc, char *argv[])
   param >> width >> height;
   param.close();
 
-  int WindowPositionX = 100;
-  int WindowPositionY = 100;
-  int WindowWidth = width*5;
-  int WindowHeight = height*5;
-  char WindowTitle[] = "life game";
+  init_window_position.at(0) = 100;
+  init_window_position.at(1) = 100;
+  window_width = width*POINT_SIZE;
+  window_height = height*POINT_SIZE;
+  char title[] = "life game";
 
   glutInit(&argc, argv);
-  glutInitWindowPosition(WindowPositionX, WindowPositionY);
-  glutInitWindowSize(WindowWidth, WindowHeight);
+  glutInitWindowPosition(init_window_position.at(0), init_window_position.at(1));
+  glutInitWindowSize(window_width, window_height);
   glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE);
-  glutCreateWindow(WindowTitle);
+  glutCreateWindow(title);
   glutDisplayFunc(display);
   glutKeyboardFunc(keyboard);
-  glutTimerFunc(100, delay, 0);
+  glutTimerFunc(100, timer, 0);
   initialize();
   glutMainLoop();
 }
@@ -56,7 +66,7 @@ void initialize()
   param >> width >> height >> dummy;
   param >> total_step;
   param.close();
-  point_size = width/20;
+  move_flag = 'p';
 
   glClearColor(1.0, 1.0, 1.0, 1.0);
   glEnable(GL_DEPTH_TEST);
@@ -72,7 +82,7 @@ void display()
     std::sprintf(vis_file,"dat/state_%03d.dat",vis_index);
     ifs.open(vis_file);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glPointSize(point_size);
+    glPointSize(POINT_SIZE);
     glBegin(GL_POINTS);
     glColor3f(0 , 0 , 0);
     for (int i = 1; i <= width; i++)
@@ -81,33 +91,54 @@ void display()
       {
         ifs >> cell;
         if (cell)
-        glVertex2f(i/(width/2.)-1, j/(height/2.)-1);
+        glVertex2f((i-0.5)/(width/2.)-1, -((j-0.5)/(height/2.)-1));
       }
     }
     glEnd();
     glutSwapBuffers();
 
     ifs.close();
-    vis_index++;
+    if (move_flag == 's')
+      vis_index++;
   }
 }
-void delay(int a)
+void timer(int a)
 {
 	glutPostRedisplay();
-	glutTimerFunc(50 , delay , 0);
+	glutTimerFunc(50 , timer , 0);
 }
 void keyboard(unsigned char key, int a, int b)
 {
-  printf("%hhu", key);
+  printf("%c", key);
+  fflush(stdout);
   switch (key)
   {
-    case 's':
+    case 'i':
       vis_index = 0;
       break;
     case 'e':
       vis_index = total_step-1;
       break;
+    case 'f':
+      if (vis_index < total_step-1)
+        vis_index++;
+      break;
+    case 'b':
+      if (vis_index > 0)
+        vis_index--;
+      break;
+    case 'p':
+      move_flag = 'p';
+      break;
+    case 's':
+      move_flag = 's';
+      break;
+    case 'q':
+      printf("\nquit\n");
+      exit(0);
+      break;
     default:
-     break;
+      printf("\n%c: no action\n",key);
+      break;
   }
 }
