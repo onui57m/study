@@ -5,7 +5,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T03:33:22+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T18:55:05+09:00
+ * @Last modified time: 2020-10-04T19:06:21+09:00
  */
 
 #include <iostream>
@@ -25,7 +25,7 @@ typedef std::vector<double> vd;
 
 int width, height, boundary;
 int init_seed;
-char interactive_flag, move_flag;
+char move_flag;
 vvi field, pre_field;
 vd interactive_pos(2);
 
@@ -175,7 +175,6 @@ vvi calc_react(vvi &pre_field, int width, int height, int boundary)
 void initialize()
 {
   init_seed = 1;
-  interactive_flag = 'p';
   move_flag = 'p';
 
   glClearColor(1.0, 1.0, 1.0, 1.0);
@@ -184,14 +183,10 @@ void initialize()
 void display()
 {
   // printf("| == in display == ");
-  switch(move_flag)
+  if (move_flag == 's')
   {
-    case 'p':
-      break;
-    case 's':
-      field = calc_react(pre_field, width, height, boundary);
-      pre_field = field;
-      break;
+    field = calc_react(pre_field, width, height, boundary);
+    pre_field = field;
   }
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glPointSize(POINT_SIZE);
@@ -221,24 +216,20 @@ void keyboard(unsigned char key, int a, int b)
   switch (key)
   {
     case 'p':
-      interactive_flag = key;
-      move_flag = interactive_flag;
+      move_flag = 'p';
       printf("posing...\n");
       break;
     case 's':
-      interactive_flag = key;
-      move_flag = interactive_flag;
+      move_flag = 's';
       printf("start!\n");
       break;
     case 'i':
-      interactive_flag = key;
       init_seed++;
       make_init(field, width, height);
       pre_field = field;
       printf("initialize\n");
       break;
     case 'c':
-      interactive_flag = key;
       for (int i = 1; i <= width; i++)
       {
         for (int j = 1; j <= height; j++)
@@ -264,16 +255,16 @@ void mouse(int button, int state, int x, int y)
   switch (button)
   {
     case GLUT_LEFT_BUTTON:
-      if (interactive_flag != 'p')
+      if (move_flag != 'p')
       {
-        interactive_flag = 'p';
+        move_flag = 'p';
         printf("posing...\n");
       }
       break;
     case GLUT_RIGHT_BUTTON:
-      if (interactive_flag != 's')
+      if (move_flag != 's')
       {
-        interactive_flag = 's';
+        move_flag = 's';
         printf("start!\n");
       }
       break;
