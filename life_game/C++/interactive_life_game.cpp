@@ -4,13 +4,8 @@
  *
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T03:33:22+09:00
-<<<<<<< HEAD
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T18:52:34+09:00
-=======
- * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T18:52:34+09:00
->>>>>>> 97ff155fcfcecf2e0ee137034207fa0d540b8975
+ * @Last modified time: 2020-10-04T18:55:05+09:00
  */
 
 #include <iostream>
