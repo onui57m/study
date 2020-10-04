@@ -4,8 +4,8 @@
  *
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T03:33:22+09:00
- * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T16:34:36+09:00
+ * @Last modified by:   Mizuki Onui
+ * @Last modified time: 2020-10-04T17:34:31+09:00
  */
 
 #include <iostream>
@@ -25,7 +25,7 @@ typedef std::vector<double> vd;
 
 int width, height, boundary;
 int init_seed;
-char interactive_flag, pre_flag;
+char interactive_flag, move_flag;
 vvi field, pre_field;
 vd interactive_pos(2);
 
@@ -176,6 +176,7 @@ void initialize()
 {
   init_seed = 1;
   interactive_flag = 'p';
+  move_flag = 'p';
 
   glClearColor(1.0, 1.0, 1.0, 1.0);
   glEnable(GL_DEPTH_TEST);
@@ -192,7 +193,7 @@ void display()
       pre_field = field;
       break;
     default:
-      switch(pre_flag)
+      switch(move_flag)
       {
         case 'p':
           break;
@@ -212,7 +213,7 @@ void display()
     for (int j = 1; j <= height; j++)
     {
       if (field.at(i).at(j))
-      glVertex2f(i/(width/2.)-1, -(j/(height/2.)-1));
+      glVertex2f((i-0.5)/(width/2.)-1, -((j-0.5)/(height/2.)-1));
     }
   }
   glEnd();
@@ -227,16 +228,17 @@ void timer(int a)
 void keyboard(unsigned char key, int a, int b)
 {
   // printf("| == in keyboard == ");
-  pre_flag = interactive_flag;
   printf("%c: ", key);
   switch (key)
   {
     case 'p':
       interactive_flag = key;
+      move_flag = interactive_flag;
       printf("posing...\n");
       break;
     case 's':
       interactive_flag = key;
+      move_flag = interactive_flag;
       printf("start!\n");
       break;
     case 'i':
@@ -280,7 +282,7 @@ void mouse(int button, int state, int x, int y)
       }
       break;
     case GLUT_RIGHT_BUTTON:
-      if (interactive_flag == 'p')
+      if (interactive_flag != 's')
       {
         interactive_flag = 's';
         printf("start!\n");

@@ -4,8 +4,8 @@
  *
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T03:33:22+09:00
- * @Last modified by:   onui_m
- * @Last modified time: 2020-10-04T14:19:04+09:00
+ * @Last modified by:   Mizuki Onui
+ * @Last modified time: 2020-10-04T17:25:20+09:00
  */
 
 #include <fstream>
@@ -81,7 +81,7 @@ void display()
       {
         ifs >> cell;
         if (cell)
-        glVertex2f(i/(width/2.)-1, j/(height/2.)-1);
+        glVertex2f((i-0.5)/(width/2.)-1, -((j-0.5)/(height/2.)-1));
       }
     }
     glEnd();
