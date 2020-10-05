@@ -17,5 +17,10 @@ OpenGLの練習がしたかった（その2）。C++で実装。
 
 中立安定曲線のグラフの書き出しは未実装。そのうち追加する。
 
+## md
+分子動力学シミュレーション。まだLJポテンシャルを入れただけ。
+
+OpenGLの練習がしたかった（その3）。が、まだmdの実装まででビジュアライザは未実装。そのうち追加する。
+
 ## Licenses
 [MIT licenses](https://opensource.org/licenses/mit-license.php)
