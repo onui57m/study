@@ -5,7 +5,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-06T01:47:30+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-06T04:39:34+09:00
+ * @Last modified time: 2020-10-06T06:08:20+09:00
  */
 
 #include <fstream>
@@ -87,6 +87,7 @@ int main()
     ofs << std::right << std::setw(10) << vel_y.at(i) << " ";
     ofs << std::right << std::setw(10) << vel_z.at(i) << "\n";
   }
+  ofs.close()
 }
 
 /* ++++++++++ functions ++++++++++ */
