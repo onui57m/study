@@ -7,7 +7,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-06T01:15:23+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-06T06:24:15+09:00
+ * @Last modified time: 2020-10-07T04:37:11+09:00
  */
 
 #include <fstream>
@@ -81,7 +81,6 @@ int main()
   dt_v = dt/MASS;
 
   ofs.open("traj.dat");
-  ofs << par_num << "\n";
   ofs.close();
   ofs.open("info.dat");
   ofs.close();
@@ -316,20 +315,23 @@ void write_cood(
     std::cout << "Cannot open cood.dat.\n";
     exit(1);
   }
-  ofs << par_num << " " << now_kBT << "\n";
-  ofs << box_x << " " << box_y << " " << box_z << "\n";
   ofs << std::fixed << std::setprecision(6);
+  ofs << std::right << std::setw(12) << par_num << " ";
+  ofs << std::right << std::setw(12) << now_kBT << "\n";
+  ofs << std::right << std::setw(12) << box_x << " ";
+  ofs << std::right << std::setw(12) << box_y << " ";
+  ofs << std::right << std::setw(12) << box_z << "\n";
   for (int i = 0; i < par_num; i++)
   {
-    ofs << std::right << std::setw(10) << pos_x.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_y.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_z.at(i) << "\n";
+    ofs << std::right << std::setw(12) << pos_x.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_y.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_z.at(i) << "\n";
   }
   for (int i = 0; i < par_num; i++)
   {
-    ofs << std::right << std::setw(10) << vel_x.at(i) << " ";
-    ofs << std::right << std::setw(10) << vel_y.at(i) << " ";
-    ofs << std::right << std::setw(10) << vel_z.at(i) << "\n";
+    ofs << std::right << std::setw(12) << vel_x.at(i) << " ";
+    ofs << std::right << std::setw(12) << vel_y.at(i) << " ";
+    ofs << std::right << std::setw(12) << vel_z.at(i) << "\n";
   }
   ofs.close();
 }
@@ -347,14 +349,16 @@ void write_traj(
     std::cout << "Cannot open traj.dat.\n";
     exit(1);
   }
-  ofs << now_step*dt << "\n";
-  ofs << box_x << " " << box_y << " " << box_z << "\n";
   ofs << std::fixed << std::setprecision(6);
+  ofs << std::right << std::setw(12) << now_step*dt << "\n";
+  ofs << std::right << std::setw(12) << box_x << " ";
+  ofs << std::right << std::setw(12) << box_y << " ";
+  ofs << std::right << std::setw(12) << box_z << "\n";
   for (int i = 0; i < par_num; i++)
   {
-    ofs << std::right << std::setw(10) << pos_x.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_y.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_z.at(i) << "\n";
+    ofs << std::right << std::setw(12) << pos_x.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_y.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_z.at(i) << "\n";
   }
   ofs.close();
 }

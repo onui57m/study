@@ -5,7 +5,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-06T01:47:30+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-06T06:08:20+09:00
+ * @Last modified time: 2020-10-07T04:36:37+09:00
  */
 
 #include <fstream>
@@ -72,22 +72,25 @@ int main()
     std::cout << "Cannot open init.dat.\n";
     return 1;
   }
-  ofs << par_num << " " << kBT << "\n";
-  ofs << box_x << " " << box_y << " " << box_z << "\n";
   ofs << std::fixed << std::setprecision(6);
+  ofs << std::right << std::setw(12) << par_num << " ";
+  ofs << std::right << std::setw(12) << kBT << "\n";
+  ofs << std::right << std::setw(12) << box_x << " ";
+  ofs << std::right << std::setw(12) << box_y << " ";
+  ofs << std::right << std::setw(12) << box_z << "\n";
   for (int i = 0; i < par_num; i++)
   {
-    ofs << std::right << std::setw(10) << pos_x.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_y.at(i) << " ";
-    ofs << std::right << std::setw(10) << pos_z.at(i) << "\n";
+    ofs << std::right << std::setw(12) << pos_x.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_y.at(i) << " ";
+    ofs << std::right << std::setw(12) << pos_z.at(i) << "\n";
   }
   for (int i = 0; i < par_num; i++)
   {
-    ofs << std::right << std::setw(10) << vel_x.at(i) << " ";
-    ofs << std::right << std::setw(10) << vel_y.at(i) << " ";
-    ofs << std::right << std::setw(10) << vel_z.at(i) << "\n";
+    ofs << std::right << std::setw(12) << vel_x.at(i) << " ";
+    ofs << std::right << std::setw(12) << vel_y.at(i) << " ";
+    ofs << std::right << std::setw(12) << vel_z.at(i) << "\n";
   }
-  ofs.close()
+  ofs.close();
 }
 
 /* ++++++++++ functions ++++++++++ */
