@@ -4,8 +4,8 @@
  *
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-07T00:53:13+09:00
- * @Last modified by:   onui_m
- * @Last modified time: 2020-10-09T04:15:51+09:00
+ * @Last modified by:   Mizuki Onui
+ * @Last modified time: 2020-10-09T06:07:00+09:00
  */
 
 #include <iostream>
@@ -34,9 +34,9 @@ vd pos_x, pos_y, pos_z;
 
 int active_window;
 vi window_id(2);
-double camera_r, camera_t, camera_phi, camera_psi;
+double camera_r, camera_t, camera_phi, camera_psi, z_near, z_far;
 vd e_camera(3), n_camera(3), h_camera(3), camera_up(3), center(3);
-int nojump_flag, line_flag;
+int nojump_flag, line_flag, dim_flag, time_flag, view_mode;
 char move_flag;
 int file_base_pos;
 std::ifstream::off_type traj_off;
@@ -58,7 +58,7 @@ vd get_e_camera(double camera_t, double camera_phi);
 vd get_n_camera(double camera_t, double camera_phi);
 vd get_h_camera(vd &e_camera, vd &n_camera);
 vd rotate(vd &axis, vd &rotated, double theta);
-void write_string(double x, double y, std::string str);
+void write_string(double x, double y, double z, std::string str);
 
 int main(int argc, char *argv[])
 {
@@ -174,6 +174,11 @@ int get_traj_off(int offset)
 void initialize()
 {
   move_flag = 'p';
+  nojump_flag = -1;
+  line_flag = -1;
+  dim_flag = -1;
+  time_flag = -1;
+  view_mode = 0;
   traj_off = 0;
   file_base_pos = 0;
   ftraj.seekg(0,std::ios_base::beg);
@@ -192,8 +197,10 @@ void initialize()
   n_camera = get_n_camera(camera_t, camera_phi);
   h_camera = get_h_camera(e_camera, n_camera);
   camera_up = rotate(e_camera, n_camera, camera_psi);
+  z_near = 1.0;
+  z_far = 100000.0;
   glLoadIdentity();
-  gluPerspective(1.0, WIDTH/HEIGHT, 1.0, 100000.0);
+  gluPerspective(20.0, WIDTH/HEIGHT, z_near, z_far);
   gluLookAt(
     camera_r*e_camera.at(0)+center.at(0), camera_r*e_camera.at(1)+center.at(1), camera_r*e_camera.at(2)+center.at(2),
     center.at(0), center.at(1), center.at(2),
@@ -209,8 +216,19 @@ void display0()
 
   glClearColor(1.0, 1.0, 1.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  if (view_mode == 0)
+  {
+    z_near = 1.0;
+    z_far = 100000.0;
+  }
+  else
+  {
+    z_near = camera_r - 1.;
+    z_far = camera_r + 1.;
+  }
   glLoadIdentity();
-  gluPerspective(20.0, WIDTH/HEIGHT, 1.0, 100000.0);
+  gluPerspective(20.0, WIDTH/HEIGHT, z_near, z_far);
   gluLookAt(
     camera_r*e_camera.at(0)+center.at(0), camera_r*e_camera.at(1)+center.at(1), camera_r*e_camera.at(2)+center.at(2),
     center.at(0), center.at(1), center.at(2),
@@ -226,7 +244,7 @@ void display0()
     particles[i][0] = pos_x.at(i);
     particles[i][1] = pos_y.at(i);
     particles[i][2] = pos_z.at(i);
-    if(nojump_flag)
+    if(nojump_flag > 0)
     {
       while (particles[i][0] < -box_x/2.)
         particles[i][0] += box_x;
@@ -247,10 +265,17 @@ void display0()
   glDrawArrays(GL_POINTS, 0, par_num);
   glDisableClientState(GL_VERTEX_ARRAY);
 
-  if (line_flag)
+  if (line_flag > 0)
   {
+    glLoadIdentity();
+    gluPerspective(20.0, WIDTH/HEIGHT, 1.0, 100000.0);
+    gluLookAt(
+      camera_r*e_camera.at(0)+center.at(0), camera_r*e_camera.at(1)+center.at(1), camera_r*e_camera.at(2)+center.at(2),
+      center.at(0), center.at(1), center.at(2),
+      camera_up.at(0), camera_up.at(1), camera_up.at(2)
+    );
     glColor3f(0.0, 0.0, 1.0);
-     glLineWidth(2);
+    glLineWidth(2);
     glBegin(GL_LINE_LOOP);
       glVertex3d(-box_x/2., -box_y/2., -box_z/2.);
       glVertex3d(-box_x/2., box_y/2., -box_z/2.);
@@ -276,6 +301,46 @@ void display0()
       glVertex3d(box_x/2., -box_y/2., box_z/2.);
     glEnd();
   }
+  if (dim_flag > 0)
+  {
+    glLoadIdentity();
+    gluPerspective(20.0, WIDTH/HEIGHT, 1.0, 100000.0);
+    glTranslated(-1.2,-1.2,0);
+    gluLookAt(
+      10*e_camera.at(0), 10*e_camera.at(1), 10*e_camera.at(2),
+      0.0, 0.0, 0.0,
+      camera_up.at(0), camera_up.at(1), camera_up.at(2)
+    );
+    glLineWidth(5);
+    glColor3f(1.0, 0.0, 0.0);
+    glBegin(GL_LINES);
+      glVertex3d(0., 0., 0.);
+      glVertex3d(0.3, 0., 0.);
+    glEnd();
+    write_string(0.4, 0., 0., "x");
+    glColor3f(0.0, 1.0, 0.0);
+    glBegin(GL_LINES);
+      glVertex3d(0., 0., 0.);
+      glVertex3d(0., 0.3, 0.);
+    glEnd();
+    write_string(0., 0.4, 0., "y");
+    glColor3f(0.0, 0.0, 1.0);
+    glBegin(GL_LINES);
+      glVertex3d(0., 0., 0.);
+      glVertex3d(0., 0., 0.3);
+    glEnd();
+    write_string(0., 0., 0.4, "z");
+  }
+  if (time_flag > 0)
+  {
+    glLoadIdentity();
+    gluPerspective(20.0, WIDTH/HEIGHT, 1.0, 100000.0);
+    char now[256];
+    sprintf(now,"Current time: %-12lg",current_time);
+    std::string now_str(now);
+    write_string(-0.15, 0.15, -1., now_str);
+  }
+
 
   glutSwapBuffers();
 }
@@ -461,18 +526,21 @@ void keyboard(unsigned char key, int a, int b)
         camera_up = rotate(e_camera, n_camera, camera_psi);
         break;
       case 'l':
-        if (line_flag == 1)
-          line_flag = 0;
-        else
-         line_flag = 1;
-         break;
-      case 'j':
-        if (nojump_flag == 1)
-          nojump_flag = 0;
-        else
-          nojump_flag = 1;
+        line_flag *= -1;
         break;
-
+      case 'j':
+        nojump_flag *= -1;
+        break;
+      case 'd':
+        dim_flag *= -1;
+        break;
+      case 't':
+        time_flag *= -1;
+        break;
+      case 'w':
+        view_mode++;
+        view_mode %= 2;
+        break;
       case 'h':
         std::cout << "show help for md visualize\n";
         std::cout << "if you need detail info, please read the source.\n";
@@ -499,20 +567,21 @@ void keyboard(unsigned char key, int a, int b)
         std::cout << " f: move camera far from center (|r| += 1)\n";
         std::cout << " F: move camera far from center (|r| += 5)\n";
 
-        std::cout << "\n  !!!!!!!!! UNDER DEVELOPMENT !!!!!!!!!! \n";
-        std::cout << "                r: rotate camera around the line of sight (clockwise)\n";
-        std::cout << "                R: rotate camera around the line of sight (counterclockwise)\n";
-        std::cout << "       left arrow: rotate camera position around the line of sight (clockwise)\n";
-        std::cout << "      right arrow: rotate camera position around the line of sight (counterclockwise)\n";
-        std::cout << "         up arrow: rotate camera position up\n";
-        std::cout << "       down arrow: rotate camera position down\n";
+        std::cout << "           r: rotate camera around the line of sight (clockwise)\n";
+        std::cout << "           R: rotate camera around the line of sight (counterclockwise)\n";
+        std::cout << "  left arrow: rotate camera position around the line of sight (clockwise)\n";
+        std::cout << " right arrow: rotate camera position around the line of sight (counterclockwise)\n";
+        std::cout << "    up arrow: rotate camera position up\n";
+        std::cout << "  down arrow: rotate camera position down\n";
 
-        std::cout << "\n  The system is rotated in a non-expected manner. \n";
-        std::cout << "  !!!!!!!!! UNDER DEVELOPMENT !!!!!!!!!! \n";
-
-        std::cout << "\n=== periodic action ===\n";
+        std::cout << "\n=== view action ===\n";
         std::cout << " l: switch a flag whether to show periodic boundary or not\n";
         std::cout << " j: switch a flag whether to show particles in jumped position or not\n";
+        std::cout << " d: switch a flag whether to show the coordinate axes or not\n";
+        std::cout << " t: switch a flag whether to show current time or not\n";
+        std::cout << " w: switch view modes\n";
+        std::cout << "    w0 -> default\n";
+        std::cout << "    w1 -> Cross section\n";
 
         std::cout << "\n q: quit the program\n";
         break;
@@ -589,7 +658,7 @@ vd get_e_camera(double camera_t, double camera_phi)
 
   r.at(0) = std::sin(PI*camera_t/180.)*std::cos(PI*camera_phi/180.);
   r.at(1) = std::sin(PI*camera_t/180.)*std::sin(PI*camera_phi/180.);
-  r.at(2) = std::cos(PI*camera_phi/180.);
+  r.at(2) = std::cos(PI*camera_t/180.);
   return r;
 }
 vd get_n_camera(double camera_t, double camera_phi)
@@ -598,7 +667,7 @@ vd get_n_camera(double camera_t, double camera_phi)
 
   r.at(0) = std::sin(PI*(90-camera_t)/180.)*std::cos(PI*(180+camera_phi)/180.);
   r.at(1) = std::sin(PI*(90-camera_t)/180.)*std::sin(PI*(180+camera_phi)/180.);
-  r.at(2) = std::cos(PI*(180+camera_phi)/180.);
+  r.at(2) = std::cos(PI*(90-camera_t)/180.);
   return r;
 }
 vd get_h_camera(vd &e_camera, vd &n_camera)
@@ -633,11 +702,11 @@ vd rotate(vd &axis, vd &rotated, double theta)
   return r;
 }
 
-void write_string(double x, double y, std::string str)
+void write_string(double x, double y, double z, std::string str)
 {
   glColor3f(0, 0, 0);
-  glRasterPos2f(x, y);
+  glRasterPos3d(x, y, z);
 
   for (int i = 0; i < str.size(); i++)
-    glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, str[i]);
+    glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, str[i]);
 }
