@@ -20,18 +20,18 @@ OpenGLの練習がしたかった（その2）。C++で実装。
 ## md
 分子動力学シミュレーション。まだLJポテンシャルを入れただけ。
 
-OpenGLの練習がしたかった（その3）。まだorthographic viewだけ。
+OpenGLの練習がしたかった（その3）。回転の処理中。なんか変な風に回転するので回転行列が間違っていそう
 
 - そのうちやりたいこと
   - 統計情報の計算
   - エラーの処理（周期境界を2回超えたら怒る。近づきすぎたら怒る。カットオフと箱の大きさ）
   - book-keeping の実装
   - 温度・体積・圧力の制御
-  - screenへの射影
+  - screenへの射影 -> やった
   - 時刻の表示
   - 座標軸の表示
-  - 周期境界の表示
-  - キー入力による視点移動
+  - 周期境界の表示 -> やった
+  - キー入力による視点移動 -> やってる（バグっている）
   - 表示モードの変化（断面など）
   - マウスでクリックした位置を重心にする
   - グラフの表示（エネルギー、温度などの物理量を同時に表示したい）
@@ -40,7 +40,8 @@ OpenGLの練習がしたかった（その3）。まだorthographic viewだけ�
 
 - 参考にしたページ
   - [分子動力学法ステップ・バイ・ステップ その1](https://qiita.com/kaityo256/items/2356fff922938ae3c87c)
-
+  - [床井研究室 - 第６回 視点の移動](http://marina.sys.wakayama-u.ac.jp/~tokoi/?date=20090902)
+  - [ロドリゲスの回転公式の表現行列](http://w3e.kanazawa-it.ac.jp/math/physics/category/physical_math/linear_algebra/henkan-tex.cgi?target=/math/physics/category/physical_math/linear_algebra/rodrigues_rotation_matrix.html)
 ## fseek
 fseekの仕様を知るためにテストした。良くわからない。
 - 参考にしたページ
