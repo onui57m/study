@@ -7,13 +7,15 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-06T01:15:23+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-07T04:37:11+09:00
+ * @Last modified time: 2020-10-10T13:02:30+09:00
  */
 
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <map>
+#include <string>
 #include <random>
 
 #define E_LJ 1.
@@ -23,11 +25,16 @@
 #define PI 3.141592653589793238462
 
 typedef std::vector<double> vd;
+typedef std::vector<int> vi;
+typedef std::vector<vi> vvi;
+typedef std::map<std::string, std::string> map_ss;
 
 void read_param(
   int &total_step, int &log_step, double &dt,
-  double &fin_kBT, double &temper_speed,
-  int &flag_gen_vel, int &seed
+  double &rlist, int &book_interval,
+  double &ref_kBT, double &ref_p,
+  int &flag_gen_vel, int &seed,
+  map_ss &control_param
 );
 void read_init(
   int &par_num, double &init_kBT,
@@ -36,17 +43,27 @@ void read_init(
   vd &vel_x, vd &vel_y, vd &vel_z
 );
 void gen_vel(int par_num, int seed, double init_kBT, vd &vel_x, vd &vel_y, vd &vel_z);
-void calc_energy(
-  int par_num, vd &energy,
+vvi get_verlet_list(
+  int par_num, double rlist,
   double box_x, double box_y, double box_z,
-  vd &pos_x, vd &pos_y, vd &pos_z,
-  vd &vel_x, vd &vel_y, vd &vel_z
+  vd &pos_x, vd &pos_y, vd &pos_z
 );
 void calc_force(
-  int par_num,
+  int par_num, map_ss &control_param, vvi &verlet_list,
   double box_x, double box_y, double box_z,
   vd &pos_x, vd &pos_y, vd &pos_z,
-  vd &force_x, vd &force_y, vd &force_z
+  vd &force_x, vd &force_y, vd &force_z,
+  vd &energy
+);
+void calc_energy(int par_num, vd &energy, vd &vel_x, vd &vel_y, vd &vel_z);
+void calc_dynamics(
+  int par_num, map_ss &control_param, vvi &verlet_list,
+  double dt, double dt_v,
+  double &box_x, double &box_y, double &box_z,
+  vd &pos_x, vd &pos_y, vd &pos_z,
+  vd &vel_x, vd &vel_y, vd &vel_z,
+  vd &force_x, vd &force_y, vd &force_z,
+  vd &energy
 );
 void write_info(int now_step, double dt, vd &energy);
 void write_cood(
@@ -67,14 +84,16 @@ void re_pos(double box_x, double box_y, double box_z, double &rx, double &ry, do
 
 int main()
 {
-  int par_num, total_step, log_step, now_step, flag_gen_vel, seed;
-  double box_x, box_y, box_z, dt, dt_v, init_kBT, fin_kBT, now_kBT, temper_speed;
+  int par_num, total_step, log_step, now_step, book_interval, flag_gen_vel, seed;
+  double box_x, box_y, box_z, dt, dt_v, rlist, init_kBT, ref_kBT, now_kBT, ref_p;
+  map_ss control_param;
+  vvi verlet_list;
   vd pos_x, pos_y, pos_z;
   vd vel_x, vel_y, vel_z;
   std::ofstream ofs;
 
 
-  read_param(total_step, log_step, dt, fin_kBT, temper_speed, flag_gen_vel, seed);
+  read_param(total_step, log_step, dt, rlist, book_interval, ref_kBT, ref_p, flag_gen_vel, seed, control_param);
   read_init(par_num, init_kBT, box_x, box_y, box_z, pos_x, pos_y, pos_z, vel_x, vel_y, vel_z);
   if (flag_gen_vel)
     gen_vel(par_num, seed, init_kBT, vel_x, vel_y, vel_z);
@@ -88,28 +107,27 @@ int main()
   vd force_x(par_num, 0.0), force_y(par_num, 0.0), force_z(par_num, 0.0);
   vd energy(3, 0.0); /* total kinetic potential */
 
-  calc_energy(par_num, energy, box_x, box_y, box_z, pos_x, pos_y, pos_z, vel_x, vel_y, vel_z);
+  verlet_list = get_verlet_list(par_num, rlist, box_x, box_y, box_z, pos_x, pos_y, pos_z);
+  calc_force(par_num, control_param, verlet_list, box_x, box_y, box_z, pos_x, pos_y, pos_z, force_x, force_y, force_z, energy);
+  calc_energy(par_num, energy, vel_x, vel_y, vel_z);
   write_info(0, dt, energy);
   write_traj(par_num, 0, dt, box_x, box_y, box_z, pos_x, pos_y, pos_z);
   for (now_step = 1; now_step <= total_step; now_step++)
   {
-    for (int i = 0; i < par_num; i++)
-    {
-      pos_x.at(i) += vel_x.at(i) * dt;
-      pos_y.at(i) += vel_y.at(i) * dt;
-      pos_z.at(i) += vel_z.at(i) * dt;
-    }
-    calc_force(par_num, box_x, box_y, box_z, pos_x, pos_y, pos_z, force_x, force_y, force_z);
-    for (int i = 0; i < par_num; i++)
-    {
-      vel_x.at(i) += force_x.at(i) * dt_v;
-      vel_y.at(i) += force_y.at(i) * dt_v;
-      vel_z.at(i) += force_z.at(i) * dt_v;
-    }
-
+    calc_dynamics(
+      par_num, control_param, verlet_list,
+      dt, dt_v,
+      box_x, box_y, box_z,
+      pos_x, pos_y, pos_z,
+      vel_x, vel_y, vel_z,
+      force_x, force_y, force_z,
+      energy
+    );
+    if (now_step % book_interval)
+      verlet_list = get_verlet_list(par_num, rlist, box_x, box_y, box_z, pos_x, pos_y, pos_z);
     if (now_step % log_step == 0)
     {
-      calc_energy(par_num, energy, box_x, box_y, box_z, pos_x, pos_y, pos_z, vel_x, vel_y, vel_z);
+      calc_energy(par_num, energy, vel_x, vel_y, vel_z);
 
       write_info(now_step, dt, energy);
       write_traj(par_num, now_step, dt, box_x, box_y, box_z, pos_x, pos_y, pos_z);
@@ -123,11 +141,24 @@ int main()
 /* ++++++++++ functions ++++++++++ */
 void read_param(
   int &total_step, int &log_step, double &dt,
-  double &fin_kBT, double &temper_speed,
-  int &flag_gen_vel, int &seed
+  double &rlist, int &book_interval,
+  double &ref_kBT, double &ref_p,
+  int &flag_gen_vel, int &seed,
+  map_ss &control_param
 )
 {
+  /*
+    a list of parameter name
+
+    TOTAL_STEP, LOG_STEP, DT
+    USE_VERLET_LIST, TEMPERATURE_COUPLING, PRESSURE_COUPLING
+    RLIST, BOOK_INTERVAL
+    REF_KBT
+    REF_P
+    FLAG_GEN_VEL, SEED
+  */
   std::ifstream fparam;
+  std::string line, param_name, param_value;
 
   fparam.open("param.dat");
   if (!fparam)
@@ -135,9 +166,43 @@ void read_param(
     std::cout << "Cannot open param.dat.\n";
     exit(1);
   }
-  fparam >> total_step >> log_step >> dt;
-  fparam >> fin_kBT >> temper_speed;
-  fparam >> flag_gen_vel >> seed;
+  while (std::getline(fparam,line))
+  {
+    if (line.size() == 0 || line.at(0) == '#')
+      continue;
+    std::stringstream ss{line};
+    ss >> param_name;
+    if(param_name == "TOTAL_STEP")
+      ss >> total_step;
+    else if(param_name == "LOG_STEP")
+      ss >> log_step;
+    else if (param_name == "DT")
+      ss >> dt;
+    else if (param_name == "USE_VERLET_LIST" ||
+             param_name == "TEMPERATURE_COUPLING" ||
+             param_name == "PRESSURE_COUPLING")
+    {
+      ss >> param_value;
+      control_param[param_name] = param_value;
+    }
+    else if (param_name == "RLIST")
+      ss >> rlist;
+    else if (param_name == "BOOK_INTERVAL")
+      ss >> book_interval;
+    else if (param_name == "REF_KBT")
+      ss >> ref_kBT;
+    else if (param_name == "REF_P")
+      ss >> ref_p;
+    else if (param_name == "FLAG_GEN_VEL")
+      ss >> flag_gen_vel;
+    else if (param_name == "SEED")
+      ss >> seed;
+    else
+    {
+      std::cout << "Unknown parameter: " << param_name << "\n";
+      exit(1);
+    }
+  }
   fparam.close();
 }
 void read_init(
@@ -215,24 +280,17 @@ void gen_vel(int par_num, int seed, double init_kBT, vd &vel_x, vd &vel_y, vd &v
     vel_z.at(i) *= ratio;
   }
 }
-void calc_energy(
-  int par_num, vd &energy,
+vvi get_verlet_list(
+  int par_num, double rlist,
   double box_x, double box_y, double box_z,
-  vd &pos_x, vd &pos_y, vd &pos_z,
-  vd &vel_x, vd &vel_y, vd &vel_z
+  vd &pos_x, vd &pos_y, vd &pos_z
 )
 {
   vd rij(3,0.0);
-  double dist2, dist6;
+  double dist;
+  vvi verlet_list(par_num);
 
-  for (int i = 0; i < energy.size(); i++)
-    energy.at(i) = 0.0;
-
-  for (int i = 0; i < par_num; i++)
-    energy.at(1) += vel_x.at(i)*vel_x.at(i) + vel_y.at(i)*vel_y.at(i) + vel_z.at(i)*vel_z.at(i);
-  energy.at(1) /= 2.0*MASS;
-
-  for (int i = 0; i < par_num; i++)
+  for (int i = 0; i < par_num-1; i++)
   {
     for (int j = i+1; j < par_num; j++)
     {
@@ -240,19 +298,30 @@ void calc_energy(
       rij.at(1) = pos_y.at(j) - pos_y.at(i);
       rij.at(2) = pos_z.at(j) - pos_z.at(i);
       re_pos(box_x, box_y, box_z, rij.at(0), rij.at(1), rij.at(2));
-      dist2 = rij.at(0)*rij.at(0)+rij.at(1)*rij.at(1)+rij.at(2)*rij.at(2);
-      dist6 = (dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ));
-      if (dist2 < CUTOFF_LJ*CUTOFF_LJ)
-        energy.at(2) += 4*E_LJ*(1-dist6)/(dist6*dist6);
+      dist = rij.at(0)*rij.at(0)+rij.at(1)*rij.at(1)+rij.at(2)*rij.at(2);
+      dist = std::sqrt(dist);
+      if (dist < rlist)
+        verlet_list.at(i).push_back(j);
     }
   }
+  return verlet_list;
+}
+void calc_energy(int par_num, vd &energy, vd &vel_x, vd &vel_y, vd &vel_z)
+{
+  energy.at(1) = 0.0;
+
+  for (int i = 0; i < par_num; i++)
+    energy.at(1) += vel_x.at(i)*vel_x.at(i) + vel_y.at(i)*vel_y.at(i) + vel_z.at(i)*vel_z.at(i);
+  energy.at(1) /= 2.0*MASS;
+
   energy.at(0) = energy.at(1) + energy.at(2);
 }
 void calc_force(
-  int par_num,
+  int par_num, map_ss &control_param, vvi &verlet_list,
   double box_x, double box_y, double box_z,
   vd &pos_x, vd &pos_y, vd &pos_z,
-  vd &force_x, vd &force_y, vd &force_z
+  vd &force_x, vd &force_y, vd &force_z,
+  vd &energy
 )
 {
   vd rij(3,0.0);
@@ -264,28 +333,80 @@ void calc_force(
     force_y.at(i) = 0.0;
     force_z.at(i) = 0.0;
   }
+  energy.at(2) = 0.0;
 
-  for (int i = 0; i < par_num; i++)
+  for (int i = 0; i < par_num-1; i++)
   {
-    for (int j = i+1; j < par_num; j++)
+    if (control_param.at("USE_VERLET_LIST") == "YES")
     {
-      rij.at(0) = pos_x.at(j) - pos_x.at(i);
-      rij.at(1) = pos_y.at(j) - pos_y.at(i);
-      rij.at(2) = pos_z.at(j) - pos_z.at(i);
-      re_pos(box_x, box_y, box_z, rij.at(0), rij.at(1), rij.at(2));
-      dist2 = rij.at(0)*rij.at(0)+rij.at(1)*rij.at(1)+rij.at(2)*rij.at(2);
-      dist6 = (dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ));
-      if (dist2 < CUTOFF_LJ*CUTOFF_LJ)
+      for (auto j : verlet_list.at(i))
       {
-        force = E_LJ*(48.-24.*dist6)/(dist6*dist6*dist2);
-        force_x.at(i) -= force*rij.at(0);
-        force_y.at(i) -= force*rij.at(1);
-        force_z.at(i) -= force*rij.at(2);
-        force_x.at(j) += force*rij.at(0);
-        force_y.at(j) += force*rij.at(1);
-        force_z.at(j) += force*rij.at(2);
+        rij.at(0) = pos_x.at(j) - pos_x.at(i);
+        rij.at(1) = pos_y.at(j) - pos_y.at(i);
+        rij.at(2) = pos_z.at(j) - pos_z.at(i);
+        re_pos(box_x, box_y, box_z, rij.at(0), rij.at(1), rij.at(2));
+        dist2 = rij.at(0)*rij.at(0)+rij.at(1)*rij.at(1)+rij.at(2)*rij.at(2);
+        dist6 = (dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ));
+        if (dist2 < CUTOFF_LJ*CUTOFF_LJ)
+        {
+          energy.at(2) += 4*E_LJ*(1-dist6)/(dist6*dist6);
+          force = E_LJ*(48.-24.*dist6)/(dist6*dist6*dist2);
+          force_x.at(i) -= force*rij.at(0);
+          force_y.at(i) -= force*rij.at(1);
+          force_z.at(i) -= force*rij.at(2);
+          force_x.at(j) += force*rij.at(0);
+          force_y.at(j) += force*rij.at(1);
+          force_z.at(j) += force*rij.at(2);
+        }
       }
     }
+    else
+    {
+      for (int j = i+1; j < par_num; j++)
+      {
+        rij.at(0) = pos_x.at(j) - pos_x.at(i);
+        rij.at(1) = pos_y.at(j) - pos_y.at(i);
+        rij.at(2) = pos_z.at(j) - pos_z.at(i);
+        re_pos(box_x, box_y, box_z, rij.at(0), rij.at(1), rij.at(2));
+        dist2 = rij.at(0)*rij.at(0)+rij.at(1)*rij.at(1)+rij.at(2)*rij.at(2);
+        dist6 = (dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ))*(dist2/(S_LJ*S_LJ));
+        if (dist2 < CUTOFF_LJ*CUTOFF_LJ)
+        {
+          energy.at(2) += 4*E_LJ*(1-dist6)/(dist6*dist6);
+          force = E_LJ*(48.-24.*dist6)/(dist6*dist6*dist2);
+          force_x.at(i) -= force*rij.at(0);
+          force_y.at(i) -= force*rij.at(1);
+          force_z.at(i) -= force*rij.at(2);
+          force_x.at(j) += force*rij.at(0);
+          force_y.at(j) += force*rij.at(1);
+          force_z.at(j) += force*rij.at(2);
+        }
+      }
+    }
+  }
+}
+void calc_dynamics(
+  int par_num, map_ss &control_param, vvi &verlet_list,
+  double dt, double dt_v,
+  double &box_x, double &box_y, double &box_z,
+  vd &pos_x, vd &pos_y, vd &pos_z,
+  vd &vel_x, vd &vel_y, vd &vel_z,
+  vd &force_x, vd &force_y, vd &force_z,
+  vd &energy
+)
+{
+  for (int i = 0; i < par_num; i++)
+  {
+    pos_x.at(i) += vel_x.at(i) * dt;
+    pos_y.at(i) += vel_y.at(i) * dt;
+    pos_z.at(i) += vel_z.at(i) * dt;
+  }
+  calc_force(par_num, control_param, verlet_list, box_x, box_y, box_z, pos_x, pos_y, pos_z, force_x, force_y, force_z, energy);
+  for (int i = 0; i < par_num; i++)
+  {
+    vel_x.at(i) += force_x.at(i) * dt_v;
+    vel_y.at(i) += force_y.at(i) * dt_v;
+    vel_z.at(i) += force_z.at(i) * dt_v;
   }
 }
 void write_info(int now_step, double dt, vd &energy)
@@ -362,6 +483,7 @@ void write_traj(
   }
   ofs.close();
 }
+
 /* ++++++++++ sub functions ++++++++++ */
 void re_pos(double box_x, double box_y, double box_z, double &rx, double &ry, double &rz)
 {
