@@ -5,13 +5,15 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-07T00:53:13+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-10T03:32:35+09:00
+ * @Last modified time: 2020-10-10T16:02:33+09:00
  */
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <string>
+#include <map>
 #include <cmath>
 
 #include <GL/gl.h>
@@ -27,9 +29,11 @@
 typedef std::vector<int> vi;
 typedef std::vector<double> vd;
 typedef std::vector<vd> vvd;
+typedef std::map<std::string, std::string> map_ss;
 
-int par_num, total_step, log_step;
-double box_x, box_y, box_z, dt, current_time;
+int par_num, total_step, log_step, book_interval, flag_gen_vel, seed;
+double box_x, box_y, box_z, dt, current_time, rlist, ref_kBT, ref_p;
+map_ss control_param;
 vd pos_x, pos_y, pos_z;
 
 int active_window;
@@ -43,6 +47,13 @@ std::ifstream::off_type traj_off;
 std::ifstream::pos_type traj_pos;
 std::ifstream ftraj;
 
+void read_param(
+  int &total_step, int &log_step, double &dt,
+  double &rlist, int &book_interval,
+  double &ref_kBT, double &ref_p,
+  int &flag_gen_vel, int &seed,
+  map_ss &control_param
+);
 void read_cood();
 int get_traj_off(int offset);
 
@@ -62,17 +73,9 @@ void write_string(double x, double y, double z, std::string str);
 
 int main(int argc, char *argv[])
 {
-  std::ifstream ifs, fparam;
+  std::ifstream ifs;
 
-  fparam.open("param.dat");
-  if (!fparam)
-  {
-    std::cout << "Cannot open param.dat.\n";
-    exit(1);
-  }
-  fparam >> total_step >> log_step >> dt;
-  fparam.close();
-
+  read_param(total_step, log_step, dt, rlist, book_interval, ref_kBT, ref_p, flag_gen_vel, seed, control_param);
   ifs.open("init.dat");
   if(!ifs)
   {
@@ -124,6 +127,72 @@ int main(int argc, char *argv[])
 }
 
 /* ++++++++++ functions ++++++++++ */
+void read_param(
+  int &total_step, int &log_step, double &dt,
+  double &rlist, int &book_interval,
+  double &ref_kBT, double &ref_p,
+  int &flag_gen_vel, int &seed,
+  map_ss &control_param
+)
+{
+  /*
+    a list of parameter name
+
+    TOTAL_STEP, LOG_STEP, DT
+    USE_VERLET_LIST, TEMPERATURE_COUPLING, PRESSURE_COUPLING
+    RLIST, BOOK_INTERVAL
+    REF_KBT
+    REF_P
+    FLAG_GEN_VEL, SEED
+  */
+  std::ifstream fparam;
+  std::string line, param_name, param_value;
+
+  fparam.open("param.dat");
+  if (!fparam)
+  {
+    std::cout << "Cannot open param.dat.\n";
+    exit(1);
+  }
+  while (std::getline(fparam,line))
+  {
+    if (line.size() == 0 || line.at(0) == '#')
+      continue;
+    std::stringstream ss{line};
+    ss >> param_name;
+    if(param_name == "TOTAL_STEP")
+      ss >> total_step;
+    else if(param_name == "LOG_STEP")
+      ss >> log_step;
+    else if (param_name == "DT")
+      ss >> dt;
+    else if (param_name == "USE_VERLET_LIST" ||
+             param_name == "TEMPERATURE_COUPLING" ||
+             param_name == "PRESSURE_COUPLING")
+    {
+      ss >> param_value;
+      control_param[param_name] = param_value;
+    }
+    else if (param_name == "RLIST")
+      ss >> rlist;
+    else if (param_name == "BOOK_INTERVAL")
+      ss >> book_interval;
+    else if (param_name == "REF_KBT")
+      ss >> ref_kBT;
+    else if (param_name == "REF_P")
+      ss >> ref_p;
+    else if (param_name == "FLAG_GEN_VEL")
+      ss >> flag_gen_vel;
+    else if (param_name == "SEED")
+      ss >> seed;
+    else
+    {
+      std::cout << "Unknown parameter: " << param_name << "\n";
+      exit(1);
+    }
+  }
+  fparam.close();
+}
 void read_cood()
 {
   if (file_base_pos)
@@ -153,7 +222,6 @@ void read_cood()
 int get_traj_off(int offset)
 {
   int now_step, rest;
-
   if (move_flag != 'p') current_time += log_step*dt;
   now_step = current_time/dt;
   if (offset > 0)
