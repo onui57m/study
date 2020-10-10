@@ -5,7 +5,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-07T00:53:13+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-10T16:02:33+09:00
+ * @Last modified time: 2020-10-10T18:33:48+09:00
  */
 
 #include <iostream>
@@ -195,22 +195,30 @@ void read_param(
 }
 void read_cood()
 {
+  if (move_flag == 's')
+  {
+    if (traj_off + ftraj.tellg() > (TIME_LINE_BYTE+ONE_LINE_BYTE*(par_num+1))*(total_step/log_step))
+    {
+      traj_off = (TIME_LINE_BYTE+ONE_LINE_BYTE*(par_num+1))*(total_step/log_step) - ftraj.tellg();
+      move_flag = 'p';
+    }
+    else if (traj_off + ftraj.tellg() < 0)
+    {
+      traj_off = -ftraj.tellg();
+      move_flag = 'p';
+    }
+  }
   if (file_base_pos)
     ftraj.seekg(traj_off,std::ios_base::cur);
   else
     ftraj.seekg(traj_off,std::ios_base::beg);
   traj_pos = ftraj.tellg();
-
+  // std::cout << "move_flag = " << move_flag << ", traj_off = " << traj_off << ", traj_pos = " << traj_pos << ", ftraj.eof() = " << ftraj.eof() << "\n";
   ftraj >> current_time;
   ftraj >> box_x >> box_y >> box_z;
   for (int i = 0; i < par_num; i++)
   {
     ftraj >> pos_x.at(i) >> pos_y.at(i) >> pos_z.at(i);
-  }
-  if (ftraj.eof())
-  {
-    ftraj.clear();
-    ftraj.seekg(traj_pos);
   }
   if (move_flag == 'p')
   {
@@ -218,23 +226,43 @@ void read_cood()
     file_base_pos = 1;
     ftraj.seekg(traj_pos);
   }
+  else
+    ftraj.seekg(1,std::ios_base::cur);
+  if (current_time == total_step*dt)
+  {
+    ftraj.clear();
+    ftraj.seekg(traj_pos);
+    traj_off = 0;
+    file_base_pos = 1;
+    move_flag = 'p';
+  }
 }
 int get_traj_off(int offset)
 {
   int now_step, rest;
-  if (move_flag != 'p') current_time += log_step*dt;
-  now_step = current_time/dt;
+  if (file_base_pos != 0)
+    now_step = current_time/dt;
+  else
+    now_step = 0;
+  if (move_flag != 'p')
+  {
+    now_step++;
+    if (offset == 5)
+      offset = 3;
+    if (offset == -1)
+      offset = -3;
+  }
+
   if (offset > 0)
   {
     rest = (total_step - now_step)/log_step;
-    if (offset > rest) offset = rest;
+    offset = std::min(offset, rest);
   }
   else if (offset < 0)
   {
     rest = now_step/log_step;
-    if (offset < -rest) offset = -rest;
+    offset = std::max(offset, -rest);
   }
-
   return (TIME_LINE_BYTE+ONE_LINE_BYTE*(par_num+1))*offset;
 }
 
@@ -618,10 +646,10 @@ void keyboard(unsigned char key, int a, int b)
         std::cout << " s: start\n";
         std::cout << " i: move to initial state (and pose)\n";
         std::cout << " e: move to final state (and pose)\n";
-        std::cout << " a: go ahead one step\n";
-        std::cout << " A: go ahead five steps\n";
-        std::cout << " b: go back one step\n";
-        std::cout << " B: go back five steps\n";
+        std::cout << " a: (p mode) go ahead one step   / (s mode) accelerate (*2)\n";
+        std::cout << " A: (p mode) go ahead five steps / (s mode) accelerate (*4)\n";
+        std::cout << " b: (p mode) go back one step    / (s mode) rewind (*-2)\n";
+        std::cout << " B: (p mode) go back five steps  / (s mode) rewind (*-4)\n";
 
         std::cout << "\n=== camera action ===\n";
         std::cout << " x: get orthographic view on x-axis(+) (yz plane)\n";
