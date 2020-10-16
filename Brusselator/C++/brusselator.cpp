@@ -5,7 +5,7 @@
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-10-04T22:19:25+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-10-05T04:00:47+09:00
+ * @Last modified time: 2020-10-17T03:32:00+09:00
  */
 
 #include <iostream>
@@ -35,6 +35,7 @@ typedef std::vector<vd> vvd;
 #define LINE_WIDTH 5.
 #define COLOR_BAR_WIDTH 100.
 #define TIME_BAR 50.
+#define NUM_SEP 100
 
 #define PI 3.141592653589793
 
@@ -398,7 +399,80 @@ void motion(int x, int y)
 
 void display1()
 {
+  double max_u, max_v;
+  double min_u, min_v;
+  vd du(NUM_SEP, 0.0), dv(NUM_SEP, 0.0);
+
+  glClearColor(1.0, 1.0, 1.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  min_u = -1., min_v = -1.;
+  max_u = A*9., max_v = B/A*3.;
+  glColor3f(0, 0, 0);
+  glLineWidth(2);
+  glBegin(GL_LINES);
+    glVertex2f(-0.8,-1);
+    glVertex2f(-0.8,1);
+  glEnd();
+  write_string(-0.9, 0.9, "v");
+  glBegin(GL_LINES);
+    glVertex2f(-0.8,-0.2);
+    glVertex2f(-0.75,-0.2);
+  glEnd();
+  write_string(-0.9, -0.2, "4");
+  glBegin(GL_LINES);
+    glVertex2f(-0.8,0.4);
+    glVertex2f(-0.75,0.4);
+  glEnd();
+  write_string(-0.9, 0.4, "8");
+  glBegin(GL_LINES);
+    glVertex2f(-1,-0.8);
+    glVertex2f(1,-0.8);
+  glEnd();
+  write_string(0.9, -0.9, "u");
+  glBegin(GL_LINES);
+    glVertex2f(-0.2,-0.8);
+    glVertex2f(-0.2,-0.75);
+  glEnd();
+  write_string(-0.22, -0.9, "3");
+  glBegin(GL_LINES);
+    glVertex2f(0.4,-0.8);
+    glVertex2f(0.4,-0.75);
+  glEnd();
+  write_string(0.38, -0.9, "6");
+  write_string(-0.9, -0.9, "O");
+
+  for (int i = 0; i < NUM_SEP; i++)
+  {
+    du.at(i) = (B+1)/(max_u/NUM_SEP*(i+1)) - A/((max_u/NUM_SEP*(i+1))*(max_u/NUM_SEP*(i+1)));
+    dv.at(i) = B/(max_u/NUM_SEP*(i+1));
+  }
+  glColor3f(0.5, 1, 0.5);
+  for (int i = 0; i < NUM_SEP-1; i++)
+  {
+    glBegin(GL_LINES);
+      glVertex2f(-0.8+(i+1.)/NUM_SEP*1.8,-0.8+du.at(i)/max_v*1.8);
+      glVertex2f(-0.8+(i+2.)/NUM_SEP*1.8,-0.8+du.at(i+1)/max_v*1.8);
+    glEnd();
+  }
+  glColor3f(1, 0.5, 1);
+  for (int i = 0; i < NUM_SEP-1; i++)
+  {
+    glBegin(GL_LINES);
+    glVertex2f(-0.8+(i+1.)/NUM_SEP*1.8,-0.8+dv.at(i)/max_v*1.8);
+    glVertex2f(-0.8+(i+2.)/NUM_SEP*1.8,-0.8+dv.at(i+1)/max_v*1.8);
+    glEnd();
+  }
+
+  glPointSize(1);
+  glColor3f(0, 0, 0);
+  glBegin(GL_POINTS);
+  for (int i = 1; i <= width; i++)
+  {
+    for (int j = 1; j <= height; j++)
+      glVertex2f(-0.8+field_u.at(i).at(j)/max_u*1.8, -0.8+field_v.at(i).at(j)/max_v*1.8);
+  }
+  glEnd();
   glutSwapBuffers();
 }
 
