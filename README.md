@@ -56,8 +56,10 @@ fseekの仕様を知るためにテストした。良くわからない。
 画像の取り扱い、機械学習の練習をしたい。
 
 - 順次やりたいこと
-  - ランダムに風を吹かせ、焼きなましにより参照画像に似た画像を作画するプログラムの作成
   - スコア関数をいろいろ試す（機械学習による実装？GANによる作画とか？）
+
+- 参考にしたページ
+  - [Bitmapファイルフォーマット](http://www.umekkii.jp/data/computer/file_format/bitmap.cgi)
 
 ## Licenses
 [MIT licenses](https://opensource.org/licenses/mit-license.php)
