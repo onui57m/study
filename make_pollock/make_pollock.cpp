@@ -486,6 +486,7 @@ void hill_climb(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_co
   VVVI old_each_count;
   VI old_box_count;
   s_frac old_frac;
+  VC base_color(3,255);
   std::ofstream fscore;
 
   gettimeofday(&tmp_time, NULL);
@@ -513,6 +514,8 @@ void hill_climb(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_co
       {
         std::uniform_int_distribution<int> dist_memory(0, wind_memory.size()-1);
         sel_index = dist_memory(mt);
+        while (wind_memory.at(sel_index).rgb == base_color)
+          sel_index = dist_memory(mt);
         wind1 = wind_memory.at(sel_index);
         wind2 = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
         erase_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind1, diff, sel_index);
@@ -527,6 +530,8 @@ void hill_climb(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_co
       {
         std::uniform_int_distribution<int> dist_memory(0, wind_memory.size()-1);
         sel_index = dist_memory(mt);
+        while (wind_memory.at(sel_index).rgb == base_color)
+          sel_index = dist_memory(mt);
         wind1 = wind_memory.at(sel_index);
         erase_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind1, diff, sel_index);
       }
