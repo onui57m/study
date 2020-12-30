@@ -1,12 +1,12 @@
 /**
  *
  * making pollocizied image (fractal)
- * It is assumed that ref_image is a 24-bit bitmap
+ * It is assumed that ref_image is a 24-bit bitmap, and width and height are both 2^n.
  *
  * @Author: Mizuki Onui <onui_m>
  * @Date:   2020-12-28T22:08:39+09:00
  * @Last modified by:   onui_m
- * @Last modified time: 2020-12-29T01:52:57+09:00
+ * @Last modified time: 2020-12-31T02:36:57+09:00
  */
 
 #include <iostream>
@@ -25,6 +25,9 @@
 typedef std::vector<unsigned char> VC;
 typedef std::vector<VC> VVC;
 typedef std::vector<VVC> VVVC;
+typedef std::vector<int> VI;
+typedef std::vector<VI> VVI;
+typedef std::vector<VVI> VVVI;
 typedef std::vector<std::vector<std::set<int> > > VVSI;
 
 struct s_wind
@@ -34,6 +37,12 @@ struct s_wind
   double direc;
   double power;
   VC rgb;
+};
+struct s_frac
+{
+  double frac;
+  double R;
+  double var;
 };
 struct s_BITMAPFILEHEADER
 {
@@ -75,29 +84,41 @@ struct s_bmp
 s_wind get_wind(int width, int height, VVC &color_set);
 void read_bmp(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory);
 void write_bmp(s_bmp &out_image);
-void initialize(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &score);
-void draw_line(VVVC &image, VVSI &image_memory, s_wind wind);
+void initialize(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, double &score);
+void draw_wind(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, s_wind wind, double &diff, int sel_index);
+void erase_wind(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, s_wind wind, double &diff, int sel_index);
 void k_means_pp(s_bmp &ref_image, int k_cluster, VVC &color_set);
-void anneal(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &score);
-void change_wind(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &diff);
-void blow_wind(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &diff);
+void hill_climb(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, double &score, int calc_time);
+void calc_fractality(int box_width, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, int x, int y, VC &color_before, VC &color_after, double &diff);
+void linear_regression(s_frac &fractality, VI &box_count);
 
 int main(int argc, char *argv[])
 {
   s_bmp out_image, ref_image;
   std::vector<s_wind> wind_memory;
-  int k_cluster;
-  long score;
+  int k_cluster, calc_time;
+  s_frac fractality;
+  double ref_fractality;
+  double score;
   VVC color_set;
+  VVVI each_count;
+  VI box_count;
   VVSI image_memory;
 
-  k_cluster = 8;
+  k_cluster = 8; /* the number of colors to use for drawing picture */
+  ref_fractality = 1.9; /* a reference value to which a fractality is about to be converged */
+  calc_time = 1; /* time for calculation [min] */
   if (argc > 1)
     k_cluster = std::atoi(argv[1]);
+  if (argc > 2)
+    ref_fractality = std::atof(argv[2]);
+  if (argc > 3)
+    calc_time = std::atoi(argv[3]);
+  std::cout << "k_cluster = " << k_cluster << " ref_fractality = " << ref_fractality << ", calc_time = " << calc_time << " min\n";
   read_bmp(out_image, ref_image, image_memory);
   k_means_pp(ref_image, k_cluster, color_set);
-  initialize(out_image, ref_image, image_memory, wind_memory, color_set, score);
-  anneal(out_image, ref_image, image_memory, wind_memory, color_set, score);
+  initialize(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, color_set, score);
+  hill_climb(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, color_set, score, calc_time);
   write_bmp(out_image);
 }
 
@@ -107,7 +128,7 @@ s_wind get_wind(int width, int height, VVC &color_set)
   s_wind wind;
   std::mt19937 mt(gen_seed);
   std::uniform_real_distribution<double> dist_dir(-PI, PI);
-  std::uniform_real_distribution<double> dist_pow(width/20., width/10.);
+  std::uniform_real_distribution<double> dist_pow(width/32., width/2.);
   std::uniform_int_distribution<int> dist_x(0, height-1);
   std::uniform_int_distribution<int> dist_y(0, width-1);
   std::uniform_int_distribution<int> dist_rgb(0, color_set.size()-1);
@@ -122,7 +143,8 @@ s_wind get_wind(int width, int height, VVC &color_set)
 }
 void read_bmp(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory)
 {
-  char dummy;
+  unsigned char dummy;
+  VC base_color(3,255);
   std::ifstream fbmp;
   fbmp.open("ref.bmp", std::ios::binary);
   if (!fbmp)
@@ -154,7 +176,7 @@ void read_bmp(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory)
     fbmp.read((char *) &ref_image.rgb.rgbReserved, sizeof(unsigned char));
   }
 
-  VVC one_line(ref_image.info.biWidth,VC(3,255));
+  VVC one_line(ref_image.info.biWidth,base_color);
   std::vector<std::set<int> > blank_memory(ref_image.info.biWidth);
   for (int i = 0; i < ref_image.info.biHeight; i++)
   {
@@ -164,12 +186,12 @@ void read_bmp(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory)
     for (int j = 0; j < ref_image.info.biWidth; j++)
     {
       for (int k = 0; k < 3; k++)
-        fbmp.read((char *) &ref_image.image.at(i).at(j).at(k), sizeof(char));
+        fbmp.read((char *) &ref_image.image.at(i).at(j).at(k), sizeof(unsigned char));
     }
     if (ref_image.info.biWidth % 4)
     {
       for (int j = 0; j < 4 - out_image.info.biWidth*3 % 4; j++)
-        fbmp.read((char *) &dummy, sizeof(char));
+        fbmp.read((char *) &dummy, sizeof(unsigned char));
     }
   }
   fbmp.close();
@@ -178,7 +200,9 @@ void read_bmp(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory)
 }
 void write_bmp(s_bmp &out_image)
 {
-  char dummy;
+  VC base_color(3,255);
+  int count;
+  unsigned char dummy;
   std::ofstream fbmp;
   fbmp.open("fractal.bmp", std::ios::binary);
   if (!fbmp)
@@ -211,92 +235,167 @@ void write_bmp(s_bmp &out_image)
   }
 
   dummy = 0;
+  count = 0;
   for (int i = 0; i < out_image.info.biHeight; i++)
   {
     for (int j = 0; j < out_image.info.biWidth; j++)
     {
       for (int k = 0; k < 3; k++)
-        fbmp.write((char *) &out_image.image.at(i).at(j).at(k), sizeof(char));
+        fbmp.write((char *) &out_image.image.at(i).at(j).at(k), sizeof(unsigned char));
+      if (out_image.image.at(i).at(j) == base_color)
+        count++;
     }
     if (out_image.info.biWidth % 4)
     {
       for (int j = 0; j < 4 - out_image.info.biWidth*3 % 4; j++)
       {
-        fbmp.write((char *) &dummy, sizeof(char));
+        fbmp.write((char *) &dummy, sizeof(unsigned char));
       }
     }
   }
   fbmp.close();
+  std::cout << "count = " << out_image.info.biWidth*out_image.info.biHeight-count << "\n";
 }
-void initialize(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &score)
+void initialize(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, double &score)
 {
-  int wind_num;
+  int wind_num, box_width, box_num;
+  double diff;
   s_wind wind;
 
-  wind_num = 10000;
+  box_width = out_image.info.biWidth;
+  box_num = 1;
+  while (box_width)
+  {
+    VVI one_set(box_num,VI(box_num,0));
+    each_count.push_back(one_set);
+    box_count.push_back(0);
+    box_width /= 2;
+    box_num *= 2;
+  }
+  wind_num = 100;
+  score = 0;
+  fractality.frac = 0;
+  fractality.R = 1;
+  fractality.var = 1;
   for (int i = 0; i < wind_num; i++)
   {
     wind = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
-    wind_memory.push_back(wind);
-    draw_line(out_image.image, image_memory, wind);
+    diff = 0;
+    draw_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind, diff, i);
+    score += diff;
   }
-  score = 0;
-  for (int i = 0; i < out_image.info.biWidth; i++)
+}
+void draw_wind(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, s_wind wind, double &diff, int sel_index)
+{
+  int sign;
+  double norm, dy, step_size;
+  VC color_before, color_after, base_color(3,255);
+  bool check;
+
+  if (wind_memory.size() == sel_index)
+    wind_memory.push_back(wind);
+  else
+    wind_memory.at(sel_index) = wind;
+  dy = std::tan(wind.direc);
+  step_size = std::min(std::abs(1./std::cos(wind.direc)),wind.power);
+  norm = 1 + dy*dy;
+  norm = std::sqrt(norm);
+  if (wind.direc > -PI/2 && wind.direc <= PI/2)
+    sign = 1;
+  else
+    sign = -1;
+  for (int i = 0; norm*i < wind.power ; i++)
   {
-    for (int j = 0; j < out_image.info.biHeight; j++)
+    if (wind.start_x+sign*i >= out_image.image.size() || wind.start_x+sign*i < 0) break;
+    for (int j = std::floor(dy*sign*i-step_size/2.); j <= std::floor(dy*sign*i+step_size/2.); j++)
     {
+      if (wind.start_y+j < 0) continue;
+      if (wind.start_y+j >= out_image.image.at(wind.start_x+sign*i).size()) break;
+      image_memory.at(wind.start_x+sign*i).at(wind.start_y+j).insert(sel_index);
+      color_before = out_image.image.at(wind.start_x+sign*i).at(wind.start_y+j);
+      color_after = wind_memory.at( *image_memory.at(wind.start_x+sign*i).at(wind.start_y+j).rbegin() ).rgb;
+      check = false;
       for (int k = 0; k < 3; k++)
-        score += (out_image.image.at(i).at(j).at(k) - ref_image.image.at(i).at(j).at(k))*(out_image.image.at(i).at(j).at(k) - ref_image.image.at(i).at(j).at(k));
+      {
+        if (color_before.at(k) != color_after.at(k))
+        {
+          check = true;
+          break;
+        }
+      }
+      if (check)
+      {
+        out_image.image.at(wind.start_x+sign*i).at(wind.start_y+j) = color_after;
+        if (color_before == base_color)
+          calc_fractality(out_image.info.biWidth, each_count, box_count, fractality, ref_fractality, wind.start_x+sign*i, wind.start_y+j, color_before, color_after, diff);
+        for (int k = 0; k < 3; k++)
+        {
+          diff -= (long)(color_before.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k));
+          diff += (long)(color_after.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k));
+        }
+      }
     }
   }
 }
-void draw_line(VVVC &image, VVSI &image_memory, s_wind wind)
+void erase_wind(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, s_wind wind, double &diff, int sel_index)
 {
-  static int count_wind;
+  int sign;
   double norm, dy, step_size;
+  VC color_before, color_after, base_color(3,255);
+  bool check;
 
   dy = std::tan(wind.direc);
   step_size = std::min(std::abs(1./std::cos(wind.direc)),wind.power);
   norm = 1 + dy*dy;
   norm = std::sqrt(norm);
-  if (wind.direc > -PI/2 || wind.direc <= PI/2)
-  {
-    for (int i = 0; norm*i < wind.power ; i++)
-    {
-      if (wind.start_x+i >= image.size()) break;
-      for (int j = std::floor(dy*i-step_size/2.); j <= std::floor(dy*i+step_size/2.); j++)
-      {
-        if (wind.start_y+j < 0) continue;
-        if (wind.start_y+j >= image.at(i).size()) break;
-        image.at(wind.start_x+i).at(wind.start_y+j) = wind.rgb;
-        image_memory.at(wind.start_x+i).at(wind.start_y+j).insert(count_wind);
-      }
-    }
-  }
+  if (wind.direc > -PI/2 && wind.direc <= PI/2)
+    sign = 1;
   else
+    sign = -1;
+  for (int i = 0; norm*i < wind.power ; i++)
   {
-    for (int i = 0; norm*i < wind.power ; i++)
+    if (wind.start_x+sign*i >= out_image.image.size() || wind.start_x+sign*i < 0) break;
+    for (int j = std::floor(dy*sign*i-step_size/2.); j <= std::floor(dy*sign*i+step_size/2.); j++)
     {
-      if (wind.start_x-i < 0) break;
-      for (int j = std::floor(-dy*i-step_size/2.); j <= std::floor(-dy*i+step_size/2.); j++)
+      if (wind.start_y+j < 0) continue;
+      if (wind.start_y+j >= out_image.image.at(wind.start_x+sign*i).size()) break;
+      image_memory.at(wind.start_x+sign*i).at(wind.start_y+j).erase(sel_index);
+      color_before = out_image.image.at(wind.start_x+sign*i).at(wind.start_y+j);
+      if (image_memory.at(wind.start_x+sign*i).at(wind.start_y+j).size())
+        color_after = wind_memory.at( *image_memory.at(wind.start_x+sign*i).at(wind.start_y+j).rbegin() ).rgb;
+      else
+        color_after = base_color;
+      check = false;
+      for (int k = 0; k < 3; k++)
       {
-        if (wind.start_y+j < 0) continue;
-        if (wind.start_y+j >= image.at(i).size()) break;
-        image.at(wind.start_x-i).at(wind.start_y+j) = wind.rgb;
-        image_memory.at(wind.start_x-i).at(wind.start_y+j).insert(count_wind);
+        if (color_before.at(k) != color_after.at(k))
+        {
+          check = true;
+          break;
+        }
+      }
+      if (check)
+      {
+        out_image.image.at(wind.start_x+sign*i).at(wind.start_y+j) = color_after;
+        if (color_after == base_color)
+          calc_fractality(out_image.info.biWidth, each_count, box_count, fractality, ref_fractality, wind.start_x+sign*i, wind.start_y+j, color_before, color_after, diff);
+        for (int k = 0; k < 3; k++)
+        {
+          diff -= (long)(color_before.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k));
+          diff += (long)(color_after.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind.start_x+sign*i).at(wind.start_y+j).at(k));
+        }
       }
     }
   }
-  count_wind++;
+  wind_memory.at(sel_index).rgb = base_color;
 }
 void k_means_pp(s_bmp &ref_image, int k_cluster, VVC &color_set)
 {
   std::mt19937 mt(653589);
   std::uniform_int_distribution<int> dist_center(0, ref_image.info.biWidth*ref_image.info.biHeight-1);
   std::vector<long> prob(ref_image.info.biWidth*ref_image.info.biHeight);
-  std::vector<int> blank;
-  std::vector<int> label(ref_image.info.biWidth*ref_image.info.biHeight,0), pre_label(ref_image.info.biWidth*ref_image.info.biHeight,0);
-  std::vector<std::vector<int> > clusters(k_cluster), sum_color(k_cluster, std::vector<int>(3,0));
+  VI blank, label(ref_image.info.biWidth*ref_image.info.biHeight,0), pre_label(ref_image.info.biWidth*ref_image.info.biHeight,0);
+  VVI clusters(k_cluster), sum_color(k_cluster, VI(3,0));
   VVC pre_color_set;
   int init, next, diff, icluster, max_count;
   long long prob_next;
@@ -372,295 +471,173 @@ void k_means_pp(s_bmp &ref_image, int k_cluster, VVC &color_set)
     max_count--;
   }
 }
-void anneal(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &score)
+void hill_climb(s_bmp &out_image, s_bmp &ref_image, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, double &score, int calc_time)
 {
-  /* now this is not annealing, but hill-climbing method */
-
   std::mt19937 mt(793238);
-  std::uniform_real_distribution<double> dist_prob(0, 1);
-  std::uniform_int_distribution<int> dist_que(0, 1);
-  int que;
-  double init_temp, fin_temp, current_temp;
+  std::uniform_int_distribution<int> dist_que(0, 2);
+  int que, sel_index;
   struct timeval tmp_time;
   long long init_time, fin_time, current_time;
-  long diff, best_score;
-  s_bmp best_image, old_image;
-  std::vector<s_wind> best_wind_memory, old_wind_memory;
-  VVSI best_image_memory, old_image_memory;
-  std::ofstream ftemp;
+  double diff;
+  s_bmp old_image;
+  s_wind wind1, wind2;
+  std::vector<s_wind> old_wind_memory;
+  VVSI old_image_memory;
+  VVVI old_each_count;
+  VI old_box_count;
+  s_frac old_frac;
+  std::ofstream fscore;
 
-  // init_temp = 500000, fin_temp = 5000;
   gettimeofday(&tmp_time, NULL);
   init_time = tmp_time.tv_sec*1000000 + tmp_time.tv_usec;
   current_time = init_time;
-  fin_time = init_time + 1200000000; /* 20 min */
-  best_score = score;
-  best_image = out_image;
-  best_wind_memory = wind_memory;
-  best_image_memory = image_memory;
-  ftemp.open("temp.dat");
+  fin_time = init_time + 60000000 * calc_time; /* calc_time [min] */
+  fscore.open("score.dat");
 
   while (current_time < fin_time)
   {
     gettimeofday(&tmp_time, NULL);
     current_time = tmp_time.tv_sec*1000000 + tmp_time.tv_usec;
-    // current_temp = init_temp + (fin_temp - init_temp)*(current_time-init_time)/(fin_time-init_time);
-
-    for (int i = 0; i < 100; i++)
+    fscore << current_time << " " << score << " " << fractality.frac << " " << fractality.R << " " << fractality.var << "\n";
+    for (int i = 0; i < 1; i++)
     {
       old_image = out_image;
       old_wind_memory = wind_memory;
       old_image_memory = image_memory;
+      old_each_count = each_count;
+      old_box_count = box_count;
+      old_frac = fractality;
+      diff = 0;
       que = dist_que(mt);
-      if (que)
-        change_wind(out_image, ref_image, image_memory, wind_memory, color_set, diff);
+      if (que == 0)
+      {
+        std::uniform_int_distribution<int> dist_memory(0, wind_memory.size()-1);
+        sel_index = dist_memory(mt);
+        wind1 = wind_memory.at(sel_index);
+        wind2 = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
+        erase_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind1, diff, sel_index);
+        draw_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind2, diff, sel_index);
+      }
+      else if (que == 1)
+      {
+        wind1 = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
+        draw_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind1, diff, wind_memory.size());
+      }
       else
-        blow_wind(out_image, ref_image, image_memory, wind_memory, color_set, diff);
-      if (/*std::exp(-diff/current_temp) < dist_prob(mt)*/diff >= 0)
+      {
+        std::uniform_int_distribution<int> dist_memory(0, wind_memory.size()-1);
+        sel_index = dist_memory(mt);
+        wind1 = wind_memory.at(sel_index);
+        erase_wind(out_image, ref_image, each_count, box_count, fractality, ref_fractality, image_memory, wind_memory, wind1, diff, sel_index);
+      }
+      if (diff >= 0)
       {
         out_image = old_image;
         wind_memory = old_wind_memory;
         image_memory = old_image_memory;
+        each_count = old_each_count;
+        box_count = old_box_count;
+        fractality = old_frac;
       }
       else
-      {
         score += diff;
-        if (best_score > score)
-        {
-          best_score = score;
-          best_image = out_image;
-          best_wind_memory = wind_memory;
-          best_image_memory = image_memory;
-        }
-      }
     }
-    ftemp << current_time <</* " " << current_temp <<*/ " " << score << "\n";
   }
-  ftemp.close();
-  score = best_score;
-  out_image = best_image;
-  wind_memory = best_wind_memory;
-  image_memory = best_image_memory;
+  gettimeofday(&tmp_time, NULL);
+  current_time = tmp_time.tv_sec*1000000 + tmp_time.tv_usec;
+  fscore << current_time << " " << score << " " << fractality.frac << " " << fractality.R << " " << fractality.var << "\n";
+  fscore.close();
 }
-void change_wind(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &diff)
+void calc_fractality(int box_width, VVVI &each_count, VI &box_count, s_frac &fractality, double ref_fractality, int x, int y, VC &color_before, VC &color_after, double &diff)
 {
-  static int sel_seed = 462643;
-  int sel_index;
-  double norm, dy, step_size;
-  s_wind wind_before, wind_after;
-  VC color_before, color_after;
-  bool check;
-  std::mt19937 mt(sel_seed);
-  std::uniform_int_distribution<int> dist_memory(0, wind_memory.size()-1);
+  int box_index, box_x, box_y;
+  long frac_score, R_score, var_score;
+  double variance_box, mean_box;
+  VC base_color(3,255);
+  s_frac pre_fractality;
 
-  sel_index = dist_memory(mt);
-  wind_before = wind_memory.at(sel_index);
-  wind_after = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
-
-  diff = 0;
-
-  /* ===== delete wind before ===== */
-  dy = std::tan(wind_before.direc);
-  step_size = std::min(std::abs(1./std::cos(wind_before.direc)),wind_before.power);
-  norm = 1 + dy*dy;
-  norm = std::sqrt(norm);
-  if (wind_before.direc > -PI/2 || wind_before.direc <= PI/2)
+  box_index = 0;
+  pre_fractality = fractality;
+  while (box_width)
   {
-    for (int i = 0; norm*i < wind_before.power ; i++)
+    box_x = x/box_width;
+    box_y = y/box_width;
+    if (color_before == base_color)
     {
-      if (wind_before.start_x+i >= out_image.image.size()) break;
-      for (int j = std::floor(dy*i-step_size/2.); j <= std::floor(dy*i+step_size/2.); j++)
-      {
-        if (wind_before.start_y+j < 0) continue;
-        if (wind_before.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind_before.start_x+i).at(wind_before.start_y+j).erase(sel_index);
-        color_before = out_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j);
-        if (image_memory.at(wind_before.start_x+i).at(wind_before.start_y+j).size())
-          color_after = wind_memory.at( *image_memory.at(wind_before.start_x+i).at(wind_before.start_y+j).rbegin() ).rgb;
-        else
-          color_after = VC{255, 255, 255};
-        check = 0;
-        for (int k = 0; k < 3; k++)
-        {
-          if (color_before.at(k) != color_after.at(k))
-          {
-            check = 1;
-            break;
-          }
-        }
-        if (check)
-        {
-          out_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j) = color_after;
-          for (int k = 0; k < 3; k++)
-          {
-            diff -= (long)(color_before.at(k) - ref_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j).at(k));
-            diff += (long)(color_after.at(k) - ref_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind_before.start_x+i).at(wind_before.start_y+j).at(k));
-          }
-        }
-      }
+      each_count.at(box_index).at(box_x).at(box_y)++;
+      if (each_count.at(box_index).at(box_x).at(box_y) == 1)
+        box_count.at(box_index)++;
+    }
+    else
+    {
+      each_count.at(box_index).at(box_x).at(box_y)--;
+      if (each_count.at(box_index).at(box_x).at(box_y) == 0)
+        box_count.at(box_index)--;
+    }
+    box_width /= 2;
+    box_index++;
+  }
+  mean_box = 0;
+  variance_box = 0;
+  for (int i = 0; i < 8; i++)
+  {
+    for (int j = 0; j < 8; j++)
+    {
+      mean_box += each_count.at(3).at(i).at(j);
+      variance_box += each_count.at(3).at(i).at(j)*each_count.at(3).at(i).at(j);
     }
   }
-  else
-  {
-    for (int i = 0; norm*i < wind_before.power ; i++)
-    {
-      if (wind_before.start_x-i < 0) break;
-      for (int j = std::floor(-dy*i-step_size/2.); j <= std::floor(-dy*i+step_size/2.); j++)
-      {
-        if (wind_before.start_y+j < 0) continue;
-        if (wind_before.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind_before.start_x-i).at(wind_before.start_y+j).erase(sel_index);
-        color_before = out_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j);
-        color_after = wind_memory.at( *image_memory.at(wind_before.start_x-i).at(wind_before.start_y+j).rbegin() ).rgb;
-        check = 0;
-        for (int k = 0; k < 3; k++)
-        {
-          if (color_before.at(k) != color_after.at(k))
-          {
-            check = 1;
-            break;
-          }
-        }
-        if (check)
-        {
-          out_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j) = color_after;
-          for (int k = 0; k < 3; k++)
-          {
-            diff -= (long)(color_before.at(k) - ref_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j).at(k));
-            diff += (long)(color_after.at(k) - ref_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind_before.start_x-i).at(wind_before.start_y+j).at(k));
-          }
-        }
-      }
-    }
-  }
+  mean_box /= 64.;
+  variance_box /= 64.;
+  variance_box -= mean_box*mean_box;
+  fractality.var = variance_box;
 
-  /* ===== insert wind after ===== */
-  wind_memory.at(sel_index) = wind_after;
-  dy = std::tan(wind_after.direc);
-  step_size = std::min(std::abs(1./std::cos(wind_after.direc)),wind_after.power);
-  norm = 1 + dy*dy;
-  norm = std::sqrt(norm);
-  if (wind_after.direc > -PI/2 || wind_after.direc <= PI/2)
-  {
-    for (int i = 0; norm*i < wind_after.power ; i++)
-    {
-      if (wind_after.start_x+i >= out_image.image.size()) break;
-      for (int j = std::floor(dy*i-step_size/2.); j <= std::floor(dy*i+step_size/2.); j++)
-      {
-        if (wind_after.start_y+j < 0) continue;
-        if (wind_after.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind_after.start_x+i).at(wind_after.start_y+j).insert(sel_index);
-        color_before = out_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j);
-        color_after = wind_memory.at( *image_memory.at(wind_after.start_x+i).at(wind_after.start_y+j).rbegin() ).rgb;
-        check = 0;
-        for (int k = 0; k < 3; k++)
-        {
-          if (color_before.at(k) != color_after.at(k))
-          {
-            check = 1;
-            break;
-          }
-        }
-        if (check)
-        {
-          out_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j) = color_after;
-          for (int k = 0; k < 3; k++)
-          {
-            diff -= (long)(color_before.at(k) - ref_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j).at(k));
-            diff += (long)(color_after.at(k) - ref_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind_after.start_x+i).at(wind_after.start_y+j).at(k));
-          }
-        }
-      }
-    }
-  }
-  else
-  {
-    for (int i = 0; norm*i < wind_after.power ; i++)
-    {
-      if (wind_after.start_x-i < 0) break;
-      for (int j = std::floor(-dy*i-step_size/2.); j <= std::floor(-dy*i+step_size/2.); j++)
-      {
-        if (wind_after.start_y+j < 0) continue;
-        if (wind_after.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind_after.start_x-i).at(wind_after.start_y+j).insert(sel_index);
-        color_before = out_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j);
-        color_after = wind_memory.at( *image_memory.at(wind_after.start_x-i).at(wind_after.start_y+j).rbegin() ).rgb;
-        check = 0;
-        for (int k = 0; k < 3; k++)
-        {
-          if (color_before.at(k) != color_after.at(k))
-          {
-            check = 1;
-            break;
-          }
-        }
-        if (check)
-        {
-          out_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j) = color_after;
-          for (int k = 0; k < 3; k++)
-          {
-            diff -= (long)(color_before.at(k) - ref_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j).at(k));
-            diff += (long)(color_after.at(k) - ref_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind_after.start_x-i).at(wind_after.start_y+j).at(k));
-          }
-        }
-      }
-    }
-  }
-  sel_seed++;
+  frac_score = 10000000000;
+  var_score = 100000;
+  // R_score = 10*frac_score;
+  linear_regression(fractality, box_count);
+  diff -= std::abs(pre_fractality.frac - ref_fractality)*frac_score + pre_fractality.var*var_score;
+  diff += std::abs(fractality.frac - ref_fractality)*frac_score + fractality.var*var_score;
+  // diff += (pre_fractality.R - fractality.R)*R_score;
 }
-void blow_wind(s_bmp &out_image, s_bmp &ref_image, VVSI &image_memory, std::vector<s_wind> &wind_memory, VVC &color_set, long &diff)
+void linear_regression(s_frac &fractality, VI &box_count)
 {
-  double norm, dy, step_size;
-  s_wind wind;
-  VC color_before, color_after;
+  double variance_x, variance_y, covariance, slope, segment, mean_x, mean_y, square_diff, R;
+  std::vector<double> y;
 
-  diff = 0;
-  wind = get_wind(out_image.info.biWidth, out_image.info.biHeight, color_set);
-  wind_memory.push_back(wind);
-  dy = std::tan(wind.direc);
-  step_size = std::min(std::abs(1./std::cos(wind.direc)),wind.power);
-  norm = 1 + dy*dy;
-  norm = std::sqrt(norm);
-  if (wind.direc > -PI/2 || wind.direc <= PI/2)
+  mean_x = 0;
+  mean_y = 0;
+  variance_x = 0;
+  variance_y = 0;
+  covariance = 0;
+  for (int i = 0; i < box_count.size(); i++)
   {
-    for (int i = 0; norm*i < wind.power ; i++)
-    {
-      if (wind.start_x+i >= out_image.image.size()) break;
-      for (int j = std::floor(dy*i-step_size/2.); j <= std::floor(dy*i+step_size/2.); j++)
-      {
-        if (wind.start_y+j < 0) continue;
-        if (wind.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind.start_x+i).at(wind.start_y+j).insert(wind_memory.size()-1);
-        color_before = out_image.image.at(wind.start_x+i).at(wind.start_y+j);
-        color_after = wind.rgb;
-        out_image.image.at(wind.start_x+i).at(wind.start_y+j) = color_after;
-        for (int k = 0; k < 3; k++)
-        {
-          diff -= (long)(color_before.at(k) - ref_image.image.at(wind.start_x+i).at(wind.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind.start_x+i).at(wind.start_y+j).at(k));
-          diff += (long)(color_after.at(k) - ref_image.image.at(wind.start_x+i).at(wind.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind.start_x+i).at(wind.start_y+j).at(k));
-        }
-      }
-    }
+    y.push_back(std::log2(box_count.at(i)));
+    mean_x += box_count.size()-1-i;
+    mean_y += y.at(i);
+    variance_x += (box_count.size()-1-i)*(box_count.size()-1-i);
+    variance_y += y.at(i)*y.at(i);
+    covariance += (box_count.size()-1-i)*y.at(i);
   }
+  mean_x /= box_count.size();
+  mean_y /= box_count.size();
+  variance_x /= box_count.size();
+  variance_y /= box_count.size();
+  covariance /= box_count.size();
+  variance_x -= mean_x*mean_x;
+  variance_y -= mean_y*mean_y;
+  covariance -= mean_x*mean_y;
+  if (variance_x != 0)
+    slope = covariance/variance_x;
   else
-  {
-    for (int i = 0; norm*i < wind.power ; i++)
-    {
-      if (wind.start_x-i < 0) break;
-      for (int j = std::floor(-dy*i-step_size/2.); j <= std::floor(-dy*i+step_size/2.); j++)
-      {
-        if (wind.start_y+j < 0) continue;
-        if (wind.start_y+j >= out_image.image.at(i).size()) break;
-        image_memory.at(wind.start_x-i).at(wind.start_y+j).insert(wind_memory.size()-1);
-        color_before = out_image.image.at(wind.start_x-i).at(wind.start_y+j);
-        color_after = wind.rgb;
-        out_image.image.at(wind.start_x-i).at(wind.start_y+j) = color_after;
-        for (int k = 0; k < 3; k++)
-        {
-          diff -= (long)(color_before.at(k) - ref_image.image.at(wind.start_x-i).at(wind.start_y+j).at(k))*(long)(color_before.at(k) - ref_image.image.at(wind.start_x-i).at(wind.start_y+j).at(k));
-          diff += (long)(color_after.at(k) - ref_image.image.at(wind.start_x-i).at(wind.start_y+j).at(k))*(long)(color_after.at(k) - ref_image.image.at(wind.start_x-i).at(wind.start_y+j).at(k));
-        }
-      }
-    }
-  }
+    slope = INFL;
+  segment = mean_y - slope*mean_x;
+  square_diff = 0;
+  for (int i = 0; i < box_count.size(); i++)
+    square_diff += (y.at(i) - slope*i - segment)*(y.at(i) - slope*i - segment);
+  square_diff /= box_count.size();
+  R = 1-square_diff/variance_y;
+
+  fractality.frac = -slope;
+  fractality.R = R;
 }
